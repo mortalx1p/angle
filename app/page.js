@@ -806,6 +806,9 @@ function ViralRadar({ viral, setViral, viralLoading, setViralLoading, viralError
         {source === "youtube" && (
           <div style={{ fontSize: 11.5, color: COLORS.dim, marginTop: 8 }}>Requires a <code>YOUTUBE_API_KEY</code> env var (free, from Google Cloud Console).</div>
         )}
+        {source === "reddit" && (
+          <div style={{ fontSize: 11.5, color: COLORS.dim, marginTop: 8 }}>Requires <code>REDDIT_CLIENT_ID</code> and <code>REDDIT_CLIENT_SECRET</code> env vars (free — create a "script" app at reddit.com/prefs/apps).</div>
+        )}
         {viralError && (
           <div style={{ fontSize: 11.5, color: COLORS.lose, marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={13} /> {viralError}</div>
         )}
@@ -1753,7 +1756,7 @@ const DEBUG_CHECKS = [
   {
     id: "reddit",
     name: "Reddit Trends (/api/trends/reddit)",
-    desc: "Real upvotes/comments from any subreddit's public feed. No key required.",
+    desc: "Real upvotes/comments from any subreddit. Needs REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (Reddit's .json endpoint requires OAuth as of May 2026).",
     run: async () => fetch("/api/trends/reddit?sub=test"),
     interpret: (json) => {
       if (json?.items) return { ok: true, detail: `Working — returned ${json.items.length} real results.` };
@@ -1795,7 +1798,7 @@ function useDebugCheck(check) {
 
       if (json.error) {
         const errStr = typeof json.error === "string" ? json.error : JSON.stringify(json.error);
-        const isKeyIssue = /API_KEY|api key|apikey/i.test(errStr);
+        const isKeyIssue = /API_KEY|api key|apikey|CLIENT_ID|CLIENT_SECRET/i.test(errStr);
         setState({
           status: isKeyIssue ? "config" : "error",
           httpStatus: res.status,

@@ -1,6 +1,7 @@
 export async function POST(req) {
   try {
     const { system, messages, max_tokens } = await req.json();
+    const safeMaxTokens = Math.max(max_tokens || 0, 512); // gpt-oss-120b spends tokens on hidden reasoning before writing JSON — too low a budget causes truncated/invalid JSON
 
     // Groq uses an OpenAI-compatible chat completions endpoint.
     // System prompt + user message get combined into one messages array.
@@ -17,10 +18,12 @@ export async function POST(req) {
       },
       body: JSON.stringify({
         model: "openai/gpt-oss-120b",
-        max_tokens: max_tokens || 1800,
+        max_tokens: safeMaxTokens,
         messages: groqMessages,
         response_format: { type: "json_object" },
         temperature: 0.7,
+        reasoning_effort: "low",
+        reasoning_format: "hidden",
       }),
     });
 
