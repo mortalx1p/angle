@@ -8,7 +8,7 @@ import {
   Tag, Plus, Trash2, RefreshCw, ShieldCheck, Layers, BookOpen, Trophy,
   Award, Loader2, ArrowLeft, AlertTriangle, Instagram, Youtube, Music2,
   GitBranch, Gauge, LayoutGrid, ListFilter, SlidersHorizontal, Lightbulb,
-  CircleDot, TrendingDown, Minus, Info
+  CircleDot, TrendingDown, Minus, Info, Terminal, XCircle, CheckCircle2, HelpCircle
 } from "lucide-react";
 
 /* ============================================================
@@ -474,6 +474,7 @@ export default function App() {
     { id: "offers", label: "Offers", icon: Target },
     { id: "library", label: "Content Library", icon: BookOpen },
     { id: "performance", label: "Performance", icon: BarChart3 },
+    { id: "debug", label: "Debug Center", icon: Terminal },
   ];
 
   return (
@@ -548,6 +549,7 @@ export default function App() {
         {tab === "offers" && <OffersPage offers={offers} setOffers={setOffers} activeOfferId={activeOfferId} setActiveOfferId={setActiveOfferId} showToast={showToast} />}
         {tab === "library" && <ContentLibrary library={library} setLibrary={setLibrary} showToast={showToast} />}
         {tab === "performance" && <Performance library={library} />}
+        {tab === "debug" && <DebugCenter />}
       </div>
 
       {workflowItem && (
@@ -1701,6 +1703,190 @@ function Performance({ library }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ============================================================
+   DEBUG CENTER — pings every API route live so you can see
+   exactly which ones are deployed, misconfigured, or broken.
+   ============================================================ */
+
+const DEBUG_CHECKS = [
+  {
+    id: "generate",
+    name: "AI Generation (/api/generate)",
+    desc: "Powers Analyze, Extract Angle, Hooks, Scripts, Make Organic — currently wired to Groq.",
+    run: async () => {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system: "Respond with ONLY this exact JSON, nothing else: {\"ok\":true}",
+          messages: [{ role: "user", content: "ping" }],
+          max_tokens: 30,
+        }),
+      });
+      return res;
+    },
+    interpret: (json) => {
+      const text = json?.content?.[0]?.text || "";
+      try {
+        const parsed = JSON.parse(text.trim().replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, ""));
+        if (parsed.ok === true) return { ok: true, detail: "Groq responded with valid JSON. AI generation is working." };
+        return { ok: false, detail: "Got a response but it wasn't the expected shape: " + text.slice(0, 120) };
+      } catch {
+        return { ok: false, detail: "Response wasn't valid JSON: " + text.slice(0, 120) };
+      }
+    },
+  },
+  {
+    id: "youtube",
+    name: "YouTube Trends (/api/trends/youtube)",
+    desc: "Real views/likes/comments from YouTube Shorts. Needs YOUTUBE_API_KEY env var.",
+    run: async () => fetch("/api/trends/youtube?q=test"),
+    interpret: (json) => {
+      if (json?.items) return { ok: true, detail: `Working — returned ${json.items.length} real results.` };
+      return { ok: false, detail: null }; // fall through to generic error handling
+    },
+  },
+  {
+    id: "reddit",
+    name: "Reddit Trends (/api/trends/reddit)",
+    desc: "Real upvotes/comments from any subreddit's public feed. No key required.",
+    run: async () => fetch("/api/trends/reddit?sub=test"),
+    interpret: (json) => {
+      if (json?.items) return { ok: true, detail: `Working — returned ${json.items.length} real results.` };
+      return { ok: false, detail: null };
+    },
+  },
+  {
+    id: "tiktok",
+    name: "TikTok Lookup (/api/trends/tiktok)",
+    desc: "Real title/creator/thumbnail via TikTok oEmbed. No key required, no view counts available.",
+    run: async () => fetch("/api/trends/tiktok"), // no ?url= on purpose — proves the route itself is reachable
+    interpret: (json) => {
+      // We expect a controlled 400 "Missing ?url=" JSON error here — that PROVES the route is deployed and working.
+      if (json?.error === "Missing ?url=") return { ok: true, detail: "Route is deployed and responding correctly (this test intentionally omits a URL)." };
+      return { ok: false, detail: null };
+    },
+  },
+];
+
+function useDebugCheck(check) {
+  const [state, setState] = useState({ status: "idle", detail: "Not run yet", httpStatus: null });
+
+  const run = useCallback(async () => {
+    setState({ status: "running", detail: "Checking...", httpStatus: null });
+    try {
+      const res = await check.run();
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        setState({
+          status: "missing",
+          httpStatus: res.status,
+          detail: `Server returned non-JSON (starts with "${text.trim().slice(0, 30)}..."). This almost always means the route file isn't deployed yet, or the folder path is wrong on GitHub.`,
+        });
+        return;
+      }
+
+      if (json.error) {
+        const errStr = typeof json.error === "string" ? json.error : JSON.stringify(json.error);
+        const isKeyIssue = /API_KEY|api key|apikey/i.test(errStr);
+        setState({
+          status: isKeyIssue ? "config" : "error",
+          httpStatus: res.status,
+          detail: isKeyIssue
+            ? `Missing configuration: ${errStr}. Add this in Vercel → Settings → Environment Variables, then redeploy.`
+            : `Route is deployed but returned an error: ${errStr}`,
+        });
+        return;
+      }
+
+      const interpreted = check.interpret(json);
+      if (interpreted.ok) {
+        setState({ status: "ok", httpStatus: res.status, detail: interpreted.detail });
+      } else {
+        setState({
+          status: "error",
+          httpStatus: res.status,
+          detail: interpreted.detail || "Route responded but the shape was unexpected: " + JSON.stringify(json).slice(0, 150),
+        });
+      }
+    } catch (e) {
+      setState({ status: "network", httpStatus: null, detail: "Network error — couldn't reach the route at all: " + e.message });
+    }
+  }, [check]);
+
+  return [state, run];
+}
+
+const DEBUG_STATUS_META = {
+  idle: { icon: HelpCircle, color: COLORS.dim, label: "Not run" },
+  running: { icon: Loader2, color: COLORS.amber, label: "Checking..." },
+  ok: { icon: CheckCircle2, color: COLORS.win, label: "Working" },
+  config: { icon: AlertTriangle, color: COLORS.amber, label: "Missing config" },
+  error: { icon: XCircle, color: COLORS.lose, label: "Error" },
+  missing: { icon: XCircle, color: COLORS.lose, label: "Not deployed" },
+  network: { icon: XCircle, color: COLORS.lose, label: "Network error" },
+};
+
+function DebugCheckRow({ check }) {
+  const [state, run] = useDebugCheck(check);
+  const meta = DEBUG_STATUS_META[state.status];
+  const Icon = meta.icon;
+
+  useEffect(() => { run(); }, []); // eslint-disable-line
+
+  return (
+    <Card style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: 16 }}>
+      <div style={{ marginTop: 2 }}>
+        <Icon size={18} color={meta.color} style={state.status === "running" ? { animation: "pulse 1s infinite" } : {}} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+          <span style={{ fontWeight: 700, fontSize: 13.5 }}>{check.name}</span>
+          <Badge tone={state.status === "ok" ? "win" : state.status === "config" ? "amber" : state.status === "idle" || state.status === "running" ? "default" : "lose"}>
+            {meta.label}{state.httpStatus ? ` · HTTP ${state.httpStatus}` : ""}
+          </Badge>
+        </div>
+        <div style={{ fontSize: 11.5, color: COLORS.dim, marginBottom: 6 }}>{check.desc}</div>
+        <div style={{ fontSize: 12, lineHeight: 1.5, fontFamily: "monospace", background: COLORS.surface2, padding: "8px 10px", borderRadius: 6, color: state.status === "ok" ? COLORS.win : COLORS.text }}>
+          {state.detail}
+        </div>
+      </div>
+      <Btn size="sm" variant="outline" icon={RefreshCw} onClick={run} disabled={state.status === "running"}>Retest</Btn>
+    </Card>
+  );
+}
+
+function DebugCenter() {
+  const [runId, setRunId] = useState(0);
+
+  return (
+    <div style={{ animation: "fadeIn 0.2s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Terminal size={19} color={COLORS.amber} /> Debug Center</h1>
+        <Btn variant="primary" icon={RefreshCw} onClick={() => setRunId((n) => n + 1)}>Run All Checks</Btn>
+      </div>
+      <p style={{ color: COLORS.dim, fontSize: 13, marginBottom: 20 }}>
+        Live-pings every API route this app depends on. "Not deployed" means the route file isn't live on Vercel yet (GitHub upload or redeploy issue). "Missing config" means the route exists but needs an environment variable. "Working" means it's genuinely functioning right now.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }} key={runId}>
+        {DEBUG_CHECKS.map((c) => <DebugCheckRow key={c.id + "-" + runId} check={c} />)}
+      </div>
+
+      <Card style={{ marginTop: 20, background: "rgba(139,124,246,0.06)", borderColor: "rgba(139,124,246,0.25)" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <Info size={15} color={COLORS.violet} style={{ marginTop: 1, flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            <strong>Reading the results:</strong> "Not deployed" on a route usually means that specific file didn't make it into your GitHub repo at the exact folder path (e.g. <code>app/api/trends/youtube/route.js</code>), or Vercel's latest build failed and is still serving an older deployment. "Missing config" means the code is live but an environment variable (like <code>GROQ_API_KEY</code> or <code>YOUTUBE_API_KEY</code>) isn't set in Vercel yet — add it under Project → Settings → Environment Variables, then redeploy for it to take effect.
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
