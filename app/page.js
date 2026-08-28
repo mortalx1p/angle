@@ -447,6 +447,7 @@ export default function App() {
   }, []);
   const [toast, setToast] = useState(null);
   const [workflowItem, setWorkflowItem] = useState(null);
+  const [scriptSeed, setScriptSeed] = useState(null);
 
   useEffect(() => saveLS(LS_KEYS.offers, offers), [offers]);
   useEffect(() => saveLS(LS_KEYS.library, library), [library]);
@@ -544,8 +545,8 @@ export default function App() {
         {tab === "dashboard" && <Dashboard viral={viral} viralLoading={viralLoading} library={library} offers={offers} setTab={setTab} openWorkflow={setWorkflowItem} />}
         {tab === "radar" && <ViralRadar viral={viral} setViral={setViral} viralLoading={viralLoading} setViralLoading={setViralLoading} viralError={viralError} setViralError={setViralError} savedViralIds={savedViralIds} setSavedViralIds={setSavedViralIds} openWorkflow={setWorkflowItem} showToast={showToast} />}
         {tab === "angles" && <AnglesLibrary extracted={extracted} library={library} />}
-        {tab === "hooklab" && <HookLab activeOffer={activeOffer} addToLibrary={addToLibrary} showToast={showToast} />}
-        {tab === "scriptstudio" && <ScriptStudio activeOffer={activeOffer} addToLibrary={addToLibrary} showToast={showToast} />}
+        {tab === "hooklab" && <HookLab activeOffer={activeOffer} addToLibrary={addToLibrary} showToast={showToast} sendToScriptStudio={(payload) => { setScriptSeed(payload); setTab("scriptstudio"); }} />}
+        {tab === "scriptstudio" && <ScriptStudio activeOffer={activeOffer} addToLibrary={addToLibrary} showToast={showToast} seed={scriptSeed} clearSeed={() => setScriptSeed(null)} />}
         {tab === "offers" && <OffersPage offers={offers} setOffers={setOffers} activeOfferId={activeOfferId} setActiveOfferId={setActiveOfferId} showToast={showToast} />}
         {tab === "library" && <ContentLibrary library={library} setLibrary={setLibrary} showToast={showToast} />}
         {tab === "performance" && <Performance library={library} />}
@@ -1210,7 +1211,14 @@ function AnglesLibrary({ extracted, library }) {
    HOOK LAB
    ============================================================ */
 
-function HookLab({ activeOffer, addToLibrary, showToast }) {
+function copyToClipboard(text, showToast) {
+  navigator.clipboard.writeText(text).then(
+    () => showToast("Copied to clipboard"),
+    () => showToast("Couldn't copy — select and copy manually", true)
+  );
+}
+
+function HookLab({ activeOffer, addToLibrary, showToast, sendToScriptStudio }) {
   const [category, setCategory] = useState(ANGLE_CATEGORIES[0].id);
   const [trigger, setTrigger] = useState("");
   const [rage, setRage] = useState([]);
@@ -1281,11 +1289,17 @@ Respond with ONLY valid JSON: {"hooks":[{"text":"string","score":0-100,"why":"st
               {results.map((h, i) => (
                 <Card key={i} style={{ display: "flex", gap: 12, alignItems: "center", padding: 12 }}>
                   <ScoreRing value={h.score} size={40} />
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>"{h.text}"</div>
                     <div style={{ fontSize: 11.5, color: COLORS.dim }}>{h.why}</div>
                   </div>
-                  <Btn size="sm" variant="ghost" icon={Save} onClick={() => addToLibrary({ type: "hook", title: h.text, hookScore: h.score, category: ANGLE_CATEGORIES.find((c) => c.id === category).name, tags: [] })} />
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <Btn size="sm" variant="ghost" icon={Copy} onClick={() => copyToClipboard(h.text, showToast)} />
+                    <Btn size="sm" variant="ghost" icon={Save} onClick={() => addToLibrary({ type: "hook", title: h.text, hookScore: h.score, category: ANGLE_CATEGORIES.find((c) => c.id === category).name, tags: [] })} />
+                    <Btn size="sm" variant="outline" icon={ArrowRight} onClick={() => sendToScriptStudio({
+                      hookText: h.text, hookScore: h.score, category, trigger, topic,
+                    })}>Use in Script Studio</Btn>
+                  </div>
                 </Card>
               ))}
             </div>
@@ -1300,7 +1314,43 @@ Respond with ONLY valid JSON: {"hooks":[{"text":"string","score":0-100,"why":"st
    SCRIPT STUDIO
    ============================================================ */
 
-function ScriptStudio({ activeOffer, addToLibrary, showToast }) {
+const SCRIPT_SECTIONS = [
+  { key: "hook", label: "Hook", duration: "0–3s", goal: "Stop the scroll." },
+  { key: "problemTension", label: "Problem / Tension", duration: "3–7s", goal: "Explain why the viewer should care." },
+  { key: "discovery", label: "Discovery", duration: "7–12s", goal: "Introduce the solution/discovery." },
+  { key: "proofDemonstration", label: "Proof / Demonstration", duration: "12–25s", goal: "Prove the claim." },
+  { key: "payoff", label: "Payoff", duration: "25–35s", goal: "Deliver the result promised by the hook." },
+  { key: "cta", label: "CTA", duration: "Final 3–5s", goal: "Tell the viewer what to do." },
+];
+
+const SCRIPT_SYSTEM_PROMPT = `You are an expert short-form viral scriptwriter for CPA/affiliate marketers. Turn a topic, product, offer, or idea into a high-retention TikTok/Reels/Shorts script.
+
+SCRIPT STRUCTURE:
+1. HOOK (0–3s) — Goal: stop the scroll. Bold, curiosity-driven, conversational, creates an information gap. No unnecessary introduction.
+2. PROBLEM / TENSION (3–7s) — Goal: explain why the viewer should care. Increase curiosity, introduce the problem/opportunity, do not reveal everything yet.
+3. DISCOVERY (7–12s) — Goal: introduce the solution/discovery. Natural transition, make the discovery feel unexpected, keep information moving quickly.
+4. PROOF / DEMONSTRATION (12–25s) — Goal: prove the claim. Show specific actions, include concrete details, include numbers/results when appropriate, make the viewer visualize what is happening.
+5. PAYOFF (25–35s) — Goal: deliver the result promised by the hook. Clear outcome, strong satisfying reveal, connect directly back to the hook.
+6. CTA (final 3–5s) — Goal: tell the viewer what to do. One clear action, short, natural, do not over-explain.
+
+GENERAL RULES:
+- Write like a real person speaking, not an advertisement.
+- Every sentence should either create curiosity, provide information, prove something, or move toward the payoff.
+- Remove filler. Keep the pacing fast. Use short sentences. Avoid repetitive explanations.
+- Maintain an open curiosity loop until the payoff.
+- Make the first sentence the strongest sentence.
+- Do not reveal the payoff too early. Prioritize retention over completeness.
+
+${COMPLIANCE_RULES}
+
+Respond with ONLY valid JSON:
+{"hook":"string","problemTension":"string","discovery":"string","proofDemonstration":"string","payoff":"string","cta":"string","hookScore":0-100,"hookScoreWhy":"string"}`;
+
+function formatScriptForCopy(script) {
+  return SCRIPT_SECTIONS.map((s) => `[${s.label.toUpperCase()} · ${s.duration}]\n${script[s.key] || ""}`).join("\n\n");
+}
+
+function ScriptStudio({ activeOffer, addToLibrary, showToast, seed, clearSeed }) {
   const [category, setCategory] = useState(ANGLE_CATEGORIES[0].id);
   const [trigger, setTrigger] = useState(TRIGGERS[0]);
   const [audience, setAudience] = useState(activeOffer?.audience || "");
@@ -1308,24 +1358,24 @@ function ScriptStudio({ activeOffer, addToLibrary, showToast }) {
   const [platform, setPlatform] = useState("TikTok");
   const [tone, setTone] = useState("Casual / relatable");
   const [topic, setTopic] = useState("");
+  const [fixedHook, setFixedHook] = useState(null);
   const [loading, setLoading] = useState(false);
   const [script, setScript] = useState(null);
   const [organicLoading, setOrganicLoading] = useState(false);
+  const consumedSeed = useRef(false);
 
-  async function generate() {
+  async function generate(hookOverride) {
     if (!topic.trim()) { showToast("Describe the topic or offer first", true); return; }
     setLoading(true);
     setScript(null);
     try {
       const catObj = ANGLE_CATEGORIES.find((c) => c.id === category);
       const result = await callClaude(
-        `You are a short-form video script generator for CPA/affiliate marketers, producing native, non-ad-feeling creator content.
-${COMPLIANCE_RULES}
-Respond with ONLY valid JSON:
-{"hook":"string","setup":"string","curiosity":"string - the information gap introduced","storyOrDemo":"string","reveal":"string","cta":"string","hookScore":0-100,"hookScoreWhy":"string"}`,
-        `Topic/offer: ${topic}\nAngle category: ${catObj.name} — ${catObj.desc}\nPsychological trigger: ${trigger}\nAudience: ${audience || "general"}\nLength: ${length}\nPlatform: ${platform}\nTone: ${tone}`,
+        SCRIPT_SYSTEM_PROMPT,
+        `Topic/offer: ${topic}\nAngle category: ${catObj.name} — ${catObj.desc}\nPsychological trigger: ${trigger}\nAudience: ${audience || "general"}\nLength: ${length}\nPlatform: ${platform}\nTone: ${tone}${hookOverride ? `\n\nUse this EXACT hook line as the HOOK section, word for word — do not change it: "${hookOverride}"\nBuild the Problem/Tension, Discovery, Proof/Demonstration, Payoff, and CTA sections around this hook.` : ""}`,
         1800
       );
+      if (hookOverride) result.hook = hookOverride; // guarantee it's used verbatim
       setScript(result);
     } catch (e) {
       showToast("Script generation failed — try again", true);
@@ -1334,14 +1384,46 @@ Respond with ONLY valid JSON:
     }
   }
 
+  useEffect(() => {
+    if (seed && !consumedSeed.current) {
+      consumedSeed.current = true;
+      setFixedHook(seed.hookText);
+      setTopic(seed.topic || seed.hookText);
+      if (seed.category) setCategory(seed.category);
+      if (seed.trigger) setTrigger(seed.trigger);
+      if (activeOffer?.audience) setAudience(activeOffer.audience);
+      showToast("Hook loaded — generating full script...");
+      // Fire generation directly with the seed values rather than waiting on state to settle.
+      (async () => {
+        setLoading(true);
+        setScript(null);
+        try {
+          const catObj = ANGLE_CATEGORIES.find((c) => c.id === (seed.category || category));
+          const result = await callClaude(
+            SCRIPT_SYSTEM_PROMPT,
+            `Topic/offer: ${seed.topic || seed.hookText}\nAngle category: ${catObj.name} — ${catObj.desc}\nPsychological trigger: ${seed.trigger || trigger}\nAudience: ${activeOffer?.audience || audience || "general"}\nLength: ${length}\nPlatform: ${platform}\nTone: ${tone}\n\nUse this EXACT hook line as the HOOK section, word for word — do not change it: "${seed.hookText}"\nBuild the Problem/Tension, Discovery, Proof/Demonstration, Payoff, and CTA sections around this hook.`,
+            1800
+          );
+          result.hook = seed.hookText;
+          setScript(result);
+        } catch (e) {
+          showToast("Script generation failed — try again", true);
+        } finally {
+          setLoading(false);
+          clearSeed();
+        }
+      })();
+    }
+  }, [seed]); // eslint-disable-line
+
   async function makeOrganic() {
     if (!script) return;
     setOrganicLoading(true);
     try {
       const result = await callClaude(
-        `You review short-form video scripts for CPA marketers and rewrite them to feel like native creator content. Identify sales language, excessive claims, repetitive CTAs, product-first openings, corporate wording, unrealistic promises, and over-explanation — then rewrite to remove them while preserving the same claims/compliance boundaries (never add new claims).
+        `You review short-form video scripts for CPA marketers and rewrite them to feel like native creator content. Identify sales language, excessive claims, repetitive CTAs, product-first openings, corporate wording, unrealistic promises, and over-explanation — then rewrite to remove them while preserving the same claims/compliance boundaries (never add new claims). Keep the same 6-part structure (Hook / Problem-Tension / Discovery / Proof-Demonstration / Payoff / CTA).
 ${COMPLIANCE_RULES}
-Respond with ONLY valid JSON with the SAME shape as input: {"hook":"string","setup":"string","curiosity":"string","storyOrDemo":"string","reveal":"string","cta":"string","hookScore":0-100,"hookScoreWhy":"string","issuesFound":["string"]}`,
+Respond with ONLY valid JSON with the SAME shape as input: {"hook":"string","problemTension":"string","discovery":"string","proofDemonstration":"string","payoff":"string","cta":"string","hookScore":0-100,"hookScoreWhy":"string","issuesFound":["string"]}`,
         `Rewrite this script to feel less like an ad:\n${JSON.stringify(script)}`,
         1800
       );
@@ -1356,7 +1438,18 @@ Respond with ONLY valid JSON with the SAME shape as input: {"hook":"string","set
   return (
     <div style={{ animation: "fadeIn 0.2s ease" }}>
       <h1 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Script Studio</h1>
-      <p style={{ color: COLORS.dim, fontSize: 13, marginBottom: 20 }}>Build a full hook → setup → curiosity → reveal → CTA script from scratch.</p>
+      <p style={{ color: COLORS.dim, fontSize: 13, marginBottom: 20 }}>Hook → Problem/Tension → Discovery → Proof/Demonstration → Payoff → CTA, timed for retention.</p>
+
+      {fixedHook && (
+        <Card style={{ marginBottom: 16, borderColor: "rgba(245,166,35,0.3)", background: "rgba(245,166,35,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <Zap size={14} color={COLORS.amber} />
+            <span style={{ color: COLORS.dim }}>Locked hook from Hook Lab:</span>
+            <strong>"{fixedHook}"</strong>
+            <button onClick={() => setFixedHook(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: COLORS.dim, cursor: "pointer", fontSize: 11 }}>Unlock ×</button>
+          </div>
+        </Card>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20 }}>
         <Card>
@@ -1371,21 +1464,22 @@ Respond with ONLY valid JSON with the SAME shape as input: {"hook":"string","set
             <Field label="Platform"><Select value={platform} onChange={setPlatform} options={["TikTok", "Instagram Reels", "YouTube Shorts"]} /></Field>
           </div>
           <Field label="Tone"><Select value={tone} onChange={setTone} options={["Casual / relatable", "Confident / punchy", "Skeptical / analytical", "Warm / storyteller"]} /></Field>
-          <Btn variant="primary" icon={loading ? Loader2 : FileText} full onClick={generate} disabled={loading}>{loading ? "Generating..." : "Generate Script"}</Btn>
+          <Btn variant="primary" icon={loading ? Loader2 : FileText} full onClick={() => generate(fixedHook)} disabled={loading}>{loading ? "Generating..." : fixedHook ? "Generate Script Around This Hook" : "Generate Script"}</Btn>
         </Card>
 
         <div>
-          {loading && <EmptyState icon={FileText} title="Writing script..." sub="Building hook, structure, and reveal." />}
+          {loading && <EmptyState icon={FileText} title="Writing script..." sub="Building all 6 sections with timing." />}
           {!loading && !script && <EmptyState icon={FileText} title="No script yet" sub="Fill in the panel to generate your first script." />}
           {!loading && script && (
             <Card>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${COLORS.border}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${COLORS.border}`, flexWrap: "wrap" }}>
                 <ScoreRing value={script.hookScore} size={44} />
-                <div>
+                <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>Hook Score: {script.hookScore}/100</div>
                   <div style={{ fontSize: 12, color: COLORS.dim }}>{script.hookScoreWhy}</div>
                 </div>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Btn size="sm" variant="outline" icon={Copy} onClick={() => copyToClipboard(formatScriptForCopy(script), showToast)}>Copy Script</Btn>
                   <Btn size="sm" variant="outline" icon={organicLoading ? Loader2 : Wand2} onClick={makeOrganic} disabled={organicLoading}>{organicLoading ? "Rewriting..." : "Make Organic"}</Btn>
                   <Btn size="sm" variant="primary" icon={Save} onClick={() => { addToLibrary({ type: "script", title: script.hook, hookScore: script.hookScore, category: ANGLE_CATEGORIES.find((c) => c.id === category).name, script, tags: [trigger] }); }}>Save</Btn>
                 </div>
@@ -1398,10 +1492,13 @@ Respond with ONLY valid JSON with the SAME shape as input: {"hook":"string","set
                   </div>
                 </div>
               )}
-              {[["Hook", script.hook], ["Setup", script.setup], ["Curiosity Gap", script.curiosity], ["Story / Demo", script.storyOrDemo], ["Reveal", script.reveal], ["CTA", script.cta]].map(([label, val]) => (
-                <div key={label} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, color: COLORS.dim, fontWeight: 700, letterSpacing: 0.3, marginBottom: 2 }}>{label.toUpperCase()}</div>
-                  <div style={{ fontSize: 13, lineHeight: 1.55 }}>{val}</div>
+              {SCRIPT_SECTIONS.map((s) => (
+                <div key={s.key} style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, color: COLORS.dim, fontWeight: 700, letterSpacing: 0.3 }}>{s.label.toUpperCase()}</span>
+                    <Badge tone="violet">{s.duration}</Badge>
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.55 }}>{script[s.key]}</div>
                 </div>
               ))}
             </Card>
