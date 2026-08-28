@@ -254,8 +254,68 @@ const COMPLIANCE_RULES = `Hard compliance rules that must never be violated:
 - CTAs must be natural creator language, never "Download now!" or "Click my link to make money!" — use lines like "I put the exact thing I used in my bio."`;
 
 /* ============================================================
-   SMALL UI PRIMITIVES
+   OFFER ROSTER — "The Roster" Aug 24 offer list, ranked by
+   current performance (highest first). Real data the user supplied.
    ============================================================ */
+
+const ROSTER_OFFERS = [
+  { rank: 1, brand: "Nordstrom", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 2, brand: "Best Buy", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 3, brand: "Costco", amount: 500, currency: "$", geo: "US", type: "RevShare Shopping", tag: "Flash Poll - Dynamic" },
+  { rank: 4, brand: "Barnes & Noble", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 5, brand: "Walmart", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: "Black Friday" },
+  { rank: 6, brand: "Hobby Lobby", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 7, brand: "Target", amount: 750, currency: "$", geo: "US", type: "Graduated", tag: null },
+  { rank: 8, brand: "Walmart", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 9, brand: "Target", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 10, brand: "Sam's Club", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 11, brand: "Aldi", amount: 750, currency: "$", geo: "US", type: "RevShare Shopping", tag: "Limited Time - Flashpoll" },
+  { rank: 12, brand: "Target", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 13, brand: "Victoria's Secret", amount: 100, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 14, brand: "JB Hi-Fi", amount: 750, currency: "$", geo: "AU", type: "RevShare", tag: null },
+  { rank: 15, brand: "Costco", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 16, brand: "Home Depot", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 17, brand: "DoorDash", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 18, brand: "Walmart", amount: 750, currency: "$", geo: "US", type: "RevShare Bonus", tag: "Limited Time - Product Reviewer" },
+  { rank: 19, brand: "Target", amount: 750, currency: "$", geo: "US", type: "RevShare Shopping", tag: "Limited Time - Flashpoll" },
+  { rank: 20, brand: "Garage Clothing", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 21, brand: "Sephora", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 22, brand: "Tesco", amount: 500, currency: "£", geo: "UK", type: "RevShare", tag: null },
+  { rank: 23, brand: "Sam's Club", amount: 750, currency: "$", geo: "US", type: "RevShare Shopping", tag: "Flash Poll - Dynamic" },
+  { rank: 24, brand: "Cash Bonus", amount: 750, currency: "$", geo: "US", type: "Bonus", tag: "Limited Time - 2x Rewards" },
+  { rank: 25, brand: "Uber Eats", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 26, brand: "Hollister", amount: 750, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 27, brand: "Shein", amount: 750, currency: "$", geo: "US", type: "RevShare Shopping", tag: "Flash Poll - Dynamic - Halloween" },
+  { rank: 28, brand: "Spirit Halloween", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 29, brand: "Shell Gas Station", amount: 300, currency: "$", geo: "US", type: "PrizeGrab", tag: null },
+  { rank: 30, brand: "Foot Locker", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 31, brand: "Alo Yoga", amount: 500, currency: "$", geo: "US", type: "RevShare", tag: null },
+  { rank: 32, brand: "Shein", amount: 750, currency: "$", geo: "US", type: "RevShare Shopping", tag: "Flash Poll - Dynamic - Fall" },
+  { rank: 33, brand: "Apple Cash", amount: 750, currency: "$", geo: "US", type: "RevShare Cash", tag: null },
+].map((o) => ({
+  ...o,
+  id: "roster_" + o.rank,
+  label: `Rewards ${o.geo}${o.tag ? " - " + o.tag : ""} - ${o.brand} ${o.currency}${o.amount}${o.type.includes("Shopping") ? " Shopping" : ""} (${o.type.replace(" Shopping", "")})`,
+}));
+
+function rosterToOfferObject(r) {
+  return {
+    id: uid(),
+    name: r.label,
+    category: "Rewards / Sweepstakes CPA",
+    audience: `${r.geo} consumers interested in ${r.brand} shopping or rewards`,
+    action: `Complete the reward offer flow for a chance to receive a ${r.currency}${r.amount} ${r.brand} gift card`,
+    geo: r.geo,
+    benefit: `Chance to receive a ${r.currency}${r.amount} ${r.brand} gift card`,
+    allowedClaims: `"You may be entered for a chance to receive a ${r.currency}${r.amount} ${r.brand} gift card"${r.tag ? `, this is a limited-time / featured offer` : ""}`,
+    forbiddenClaims: `No guaranteed win claims, no "free money" language, no guaranteed gift card delivery, no implying ${r.brand} endorses or sponsors this`,
+    landingPage: "",
+    conversionEvent: "Offer completion (lead)",
+    brandRestrictions: `${r.brand} name used only to describe the prize being offered — not an endorsement by ${r.brand}`,
+    complianceNotes: `Sweepstakes-style ${r.type} CPA offer. Must follow standard sweepstakes disclosure rules (odds, eligibility, no purchase necessary where applicable). Roster rank #${r.rank} — ranked by current performance, highest first.`,
+    rosterRank: r.rank,
+  };
+}
 
 function ScoreRing({ value, size = 44, label, colorOverride }) {
   const r = (size - 6) / 2;
@@ -557,6 +617,7 @@ export default function App() {
         <WorkflowModal
           item={workflowItem}
           offers={offers}
+          setOffers={setOffers}
           activeOfferId={activeOfferId}
           onClose={() => setWorkflowItem(null)}
           addToLibrary={addToLibrary}
@@ -843,20 +904,48 @@ function ViralRadar({ viral, setViral, viralLoading, setViralLoading, viralError
    WORKFLOW MODAL — Analyze → Extract Angle → Adapt → Hooks → Script
    ============================================================ */
 
-function WorkflowModal({ item, offers, activeOfferId, onClose, addToLibrary, setExtracted, showToast }) {
+function WorkflowModal({ item, offers, setOffers, activeOfferId, onClose, addToLibrary, setExtracted, showToast }) {
   const [step, setStep] = useState("analyze"); // analyze -> angles -> offer -> hooks -> script
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [angles, setAngles] = useState(null);
   const [chosenAngle, setChosenAngle] = useState(null);
-  const [selectedOfferId, setSelectedOfferId] = useState(activeOfferId);
+  const [selectedOffer, setSelectedOffer] = useState(offers.find((o) => o.id === activeOfferId) || null);
+  const [rosterMatches, setRosterMatches] = useState(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
   const [adaptation, setAdaptation] = useState(null);
   const [hooks, setHooks] = useState(null);
   const [chosenHook, setChosenHook] = useState(null);
   const [script, setScript] = useState(null);
   const ranAnalysis = useRef(false);
 
-  const selectedOffer = offers.find((o) => o.id === selectedOfferId);
+  async function findRosterMatches() {
+    setRosterLoading(true);
+    try {
+      const result = await callClaude(
+        `You are a CPA offer-matching engine. Given a content angle and a list of available reward-based CPA offers, rank which offers best fit the psychological mechanism, topic, and likely audience of the angle. Consider relevance of the offer's brand/category to the angle — e.g. a budgeting/"broke but smart" angle fits grocery/retail/gas offers well; a beauty-focused storytime fits Sephora/Victoria's Secret; a food-related angle fits DoorDash/Uber Eats; a general audience fits big-box retail (Walmart/Target/Costco).
+Respond with ONLY valid JSON: {"matches":[{"rank":number,"fitScore":0-100,"why":"string one sentence"}]} — "rank" must be the offer's rank number from the list below. Return exactly 6 items, best fit first.`,
+        `Angle: ${chosenAngle.angle}\nCategory: ${chosenAngle.category}\nDescription: ${chosenAngle.description}\nUnderlying mechanism: ${angles?.underlyingAngle || ""}\n\nAvailable offers:\n${ROSTER_OFFERS.map((o) => `${o.rank}. ${o.brand} ${o.currency}${o.amount} (${o.geo})${o.tag ? " — " + o.tag : ""}`).join("\n")}`,
+        1200
+      );
+      const matched = result.matches.map((m) => ({ ...m, offer: ROSTER_OFFERS.find((o) => o.rank === m.rank) })).filter((m) => m.offer);
+      setRosterMatches(matched);
+    } catch (e) {
+      showToast("Offer matching failed — try again", true);
+    } finally {
+      setRosterLoading(false);
+    }
+  }
+
+  function pickRosterOffer(rosterItem) {
+    setSelectedOffer(rosterToOfferObject(rosterItem));
+  }
+
+  function saveOfferToMyOffers() {
+    if (!selectedOffer) return;
+    setOffers((o) => o.find((x) => x.name === selectedOffer.name) ? o : [selectedOffer, ...o]);
+    showToast("Added to My Offers");
+  }
 
   const runAnalysis = useCallback(async () => {
     setLoading(true);
@@ -1065,16 +1154,53 @@ Respond with ONLY valid JSON:
           {!loading && step === "offer" && (
             <div>
               <SectionTitle icon={Target} title="Adapt To My Offer" />
-              {offers.length === 0 ? (
-                <EmptyState icon={Target} title="No offers yet" sub="Set up an offer first so the adaptation can be tailored to it." />
-              ) : (
-                <>
-                  <Field label="Choose offer">
-                    <Select value={selectedOfferId || ""} onChange={setSelectedOfferId} options={offers.map((o) => ({ value: o.id, label: o.name }))} />
-                  </Field>
-                  <Btn variant="primary" icon={Wand2} full onClick={runAdapt}>Adapt to this offer</Btn>
-                </>
+
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.dim, letterSpacing: 0.3 }}>BEST ROSTER MATCHES FOR THIS ANGLE</div>
+                  <Btn size="sm" variant="outline" icon={rosterLoading ? Loader2 : Sparkles} onClick={findRosterMatches} disabled={rosterLoading}>{rosterLoading ? "Matching..." : rosterMatches ? "Re-match" : "Find Best Offers"}</Btn>
+                </div>
+                {!rosterMatches && !rosterLoading && (
+                  <div style={{ fontSize: 12, color: COLORS.dim }}>Rank all 33 roster offers by fit for this specific angle.</div>
+                )}
+                {rosterLoading && <div style={{ fontSize: 12, color: COLORS.dim, display: "flex", alignItems: "center", gap: 8 }}><Loader2 size={13} style={{ animation: "pulse 1s infinite" }} /> Scoring offers against this angle...</div>}
+                {rosterMatches && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {rosterMatches.map((m, i) => (
+                      <Card key={i} hoverable onClick={() => pickRosterOffer(m.offer)} style={{
+                        padding: 10, display: "flex", gap: 10, alignItems: "center", cursor: "pointer",
+                        borderColor: selectedOffer?.rosterRank === m.offer.rank ? COLORS.amber : COLORS.border,
+                        background: selectedOffer?.rosterRank === m.offer.rank ? "rgba(245,166,35,0.06)" : COLORS.surface,
+                      }}>
+                        <ScoreRing value={m.fitScore} size={34} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 12.5 }}>{m.offer.brand} {m.offer.currency}{m.offer.amount} <span style={{ color: COLORS.dim, fontWeight: 500 }}>({m.offer.geo})</span></div>
+                          <div style={{ fontSize: 11, color: COLORS.dim }}>{m.why}</div>
+                        </div>
+                        {selectedOffer?.rosterRank === m.offer.rank && <Check size={14} color={COLORS.amber} />}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {offers.length > 0 && (
+                <Field label="Or choose a saved offer">
+                  <Select value={selectedOffer && !selectedOffer.rosterRank ? selectedOffer.id : ""} onChange={(v) => setSelectedOffer(offers.find((o) => o.id === v))} options={[{ value: "", label: "— select —" }, ...offers.map((o) => ({ value: o.id, label: o.name }))]} />
+                </Field>
               )}
+
+              {selectedOffer && (
+                <Card style={{ marginBottom: 14, background: "rgba(245,166,35,0.05)", borderColor: "rgba(245,166,35,0.25)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>Selected: {selectedOffer.name}</div>
+                  <div style={{ fontSize: 11.5, color: COLORS.dim, marginBottom: selectedOffer.rosterRank ? 8 : 0 }}>{selectedOffer.benefit}</div>
+                  {selectedOffer.rosterRank && !offers.find((o) => o.name === selectedOffer.name) && (
+                    <Btn size="sm" variant="ghost" icon={Save} onClick={saveOfferToMyOffers}>Save to My Offers</Btn>
+                  )}
+                </Card>
+              )}
+
+              <Btn variant="primary" icon={Wand2} full disabled={!selectedOffer} onClick={runAdapt}>Adapt to this offer</Btn>
             </div>
           )}
 
@@ -1520,6 +1646,7 @@ function emptyOffer() {
 function OffersPage({ offers, setOffers, activeOfferId, setActiveOfferId, showToast }) {
   const [draft, setDraft] = useState(emptyOffer());
   const [editing, setEditing] = useState(false);
+  const [rosterFilter, setRosterFilter] = useState("all");
 
   function save() {
     if (!draft.name.trim()) { showToast("Give the offer a name", true); return; }
@@ -1538,6 +1665,22 @@ function OffersPage({ offers, setOffers, activeOfferId, setActiveOfferId, showTo
     setOffers((o) => o.filter((x) => x.id !== id));
     if (activeOfferId === id) setActiveOfferId(null);
   }
+
+  function addRosterOffer(r) {
+    const obj = rosterToOfferObject(r);
+    if (offers.find((o) => o.name === obj.name)) { showToast("Already in My Offers", true); return; }
+    setOffers((o) => [obj, ...o]);
+    showToast(`Added ${r.brand} to My Offers`);
+    return obj;
+  }
+
+  function setRosterActive(r) {
+    const existing = offers.find((o) => o.rosterRank === r.rank);
+    const obj = existing || addRosterOffer(r);
+    if (obj) setActiveOfferId(obj.id);
+  }
+
+  const rosterFiltered = ROSTER_OFFERS.filter((r) => rosterFilter === "all" || r.geo === rosterFilter);
 
   const fields = [
     ["name", "Offer name"], ["category", "Offer category"], ["audience", "Target audience"],
@@ -1614,6 +1757,33 @@ function OffersPage({ offers, setOffers, activeOfferId, setActiveOfferId, showTo
               </div>
             </Card>
           )}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 6 }}><ListFilter size={16} color={COLORS.violet} /> The Roster — August 24</h3>
+          <div style={{ display: "flex", gap: 6 }}>
+            {["all", "US", "AU", "UK"].map((g) => <Pill key={g} active={rosterFilter === g} onClick={() => setRosterFilter(g)}>{g === "all" ? "All" : g}</Pill>)}
+          </div>
+        </div>
+        <p style={{ color: COLORS.dim, fontSize: 12.5, marginBottom: 14 }}>33 reward/RevShare offers, ranked by current performance (highest first). Add any to My Offers, or use "Find Best Offers" inside a viral workflow to auto-match against a specific angle.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {rosterFiltered.map((r) => {
+            const inMyOffers = offers.find((o) => o.name === r.label);
+            return (
+              <Card key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }}>
+                <span style={{ fontFamily: "monospace", fontSize: 11, color: COLORS.dim, width: 24, flexShrink: 0 }}>#{r.rank}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.brand} {r.currency}{r.amount}</div>
+                  <div style={{ fontSize: 10.5, color: COLORS.dim }}>{r.geo} · {r.type}{r.tag ? " · " + r.tag : ""}</div>
+                </div>
+                {activeOfferId && offers.find((o) => o.id === activeOfferId)?.rosterRank === r.rank && <Badge tone="amber">Active</Badge>}
+                <Btn size="sm" variant="ghost" onClick={() => setRosterActive(r)}>Set Active</Btn>
+                <Btn size="sm" variant={inMyOffers ? "default" : "outline"} icon={inMyOffers ? Check : Plus} onClick={() => addRosterOffer(r)} disabled={!!inMyOffers}>{inMyOffers ? "Added" : "Add"}</Btn>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </div>
